@@ -76,6 +76,7 @@ export const gerarCriadourosAedesAegyptiQuantidadeZeradas = (): CriadouroLevanta
 export const gerarEstratoPadrao = (): Estrato => {
     const estrato: Estrato = new Estrato();
     estrato.numero = 1;
+    estrato.quantidadeImoveis = 9000;
     estrato.bairros = [
         {
             nome: "Alto da Boa Vista",

@@ -14,26 +14,7 @@ npm install liraa-calculadora
 
 # Uso
 
-Para usar a biblioteca, basta importar a função calcularLiraa e passar os parâmetros necessários:
-
-```typescript
-import { calcularLiraa } from "liraa-calculadora";
-
-const dados = {
-    numRecipientes: 20,
-    numRecipComAgua: 5,
-    numRecipComLarvas: 2,
-};
-
-const liraa = calcularLiraa(dados);
-```
-
-A função calcularLiraa espera um objeto com as seguintes propriedades:
-
--   numRecipientes: o número total de recipientes encontrados na área avaliada.
--   numRecipComAgua: o número de recipientes que continham água parada no momento da avaliação.
--   numRecipComLarvas: o número de recipientes que continham larvas do mosquito Aedes aegypti no momento da avaliação.
-    A função retorna um número entre 0 e 5, que indica o índice de infestação do mosquito Aedes aegypti na área avaliada.
+Consulte a [documentação](https://gleytonlima.github.io/liraa-calculadora-typescript/), feita com o uso do projeto [Typedoc](https://github.com/TypeStrong/typedoc) para detalhes do uso
 
 # Contribuindo
 
@@ -80,5 +61,5 @@ All files     |  100.00 |      101 |         0 |          0 |        0 |       8
 
 Este projeto utiliza as seguintes bibliotecas open-source:
 
-- [jsPDF](https://github.com/MrRio/jsPDF) (versão ^2.5.1) - Biblioteca para criação de arquivos PDF usando JavaScript, desenvolvida por [James Hall](https://github.com/MrRio) e [outros colaboradores](https://github.com/MrRio/jsPDF/graphs/contributors).
-- [jsPDF-AutoTable](https://github.com/simonbengtsson/jsPDF-AutoTable) (versão ^3.5.25) - Plugin para adicionar tabelas ao jsPDF, desenvolvido por [Simon Bengtsson](https://github.com/simonbengtsson) e [outros colaboradores](https://github.com/simonbengtsson/jsPDF-AutoTable/graphs/contributors).
+-   [jsPDF](https://github.com/MrRio/jsPDF) (versão ^2.5.1) - Biblioteca para criação de arquivos PDF usando JavaScript, desenvolvida por [James Hall](https://github.com/MrRio) e [outros colaboradores](https://github.com/MrRio/jsPDF/graphs/contributors).
+-   [jsPDF-AutoTable](https://github.com/simonbengtsson/jsPDF-AutoTable) (versão ^3.5.25) - Plugin para adicionar tabelas ao jsPDF, desenvolvido por [Simon Bengtsson](https://github.com/simonbengtsson) e [outros colaboradores](https://github.com/simonbengtsson/jsPDF-AutoTable/graphs/contributors).

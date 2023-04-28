@@ -1,5 +1,7 @@
 import autoTable from "jspdf-autotable";
 import {
+    addFooters,
+    addHeaders,
     calcularBairrosAmostra,
     calcularDadosAmostraEstrato,
     calcularEstimativaImoveisPorQuarteirao,
@@ -9,12 +11,12 @@ import {
     calcularPercentualCriadouroLevantamento,
     calcularQuantidadeImoveisProgramados,
     calcularQuantidadeQuarteiroesComposicaoAmostra,
-    calcularQuarteiraoInicial,
     calcularTipoLevantamentoDadoMunicipio,
     classificarEstratosSegundoIIP,
     filtrarLevantamentosPorTexto,
     formatarDataDDMMYYY,
     formatarDataDiaMes,
+    customRound,
 } from "../functions";
 import {
     Bairro,
@@ -40,6 +42,7 @@ import {
     gerarRelatorioIndicePadrao,
 } from "./objectmother";
 import jsPDF from "jspdf";
+import { calcularQuarteiraoInicial } from "../sorteioquarteiraoinicial";
 
 jest.mock("jspdf", () => {
     const originalModule = jest.requireActual("jspdf");
@@ -59,6 +62,9 @@ jest.mock("jspdf", () => {
     };
 });
 jest.mock("jspdf-autotable");
+jest.mock("../sorteioquarteiraoinicial", () => ({
+    calcularQuarteiraoInicial: jest.fn(),
+}));
 
 describe("levantamento.model.ts", () => {
     beforeEach(() => {
@@ -85,11 +91,12 @@ describe("levantamento.model.ts", () => {
 
         expect(IB_1).toEqual(20);
         expect(IB_2).toEqual(44.7);
+        expect(IB_3).toEqual(8.2);
         expect(IB_4).toEqual(0);
     });
 
-    it("Deve classificar risco estratos segundo IIP Aedes", () => {
-        const estratos: EstratoResumo[] = [
+    it("Deve classificar risco estratos segundo IIP Aedes com cálculo de IIP", () => {
+        const estratosResumo: EstratoResumo[] = [
             {
                 iip: calcularIIP(238, 3),
                 numero: 1,
@@ -100,7 +107,7 @@ describe("levantamento.model.ts", () => {
             },
         ];
 
-        const classificacao = classificarEstratosSegundoIIP(estratos);
+        const classificacao = classificarEstratosSegundoIIP(estratosResumo);
 
         expect(classificacao.length).toEqual(3);
         const classificacaoRiscoBaixo = classificacao.find((c) => c.risco === "Baixo");
@@ -113,6 +120,57 @@ describe("levantamento.model.ts", () => {
         expect(classificacaoRiscoBaixo?.quantidade).toEqual(0);
         expect(classificacaoRiscoMedio?.quantidade).toEqual(1);
         expect(classificacaoRiscoAlto?.quantidade).toEqual(1);
+    });
+
+    it("Deve classificar risco estratos segundo IIP Aedes - LIMITES", () => {
+        const estratosResumo: EstratoResumo[] = [
+            {
+                iip: 0.9,
+                numero: 1,
+            },
+            {
+                iip: 0.8,
+                numero: 2,
+            },
+            {
+                iip: 1.0,
+                numero: 3,
+            },
+            {
+                iip: 1.1,
+                numero: 4,
+            },
+            {
+                iip: 3.8,
+                numero: 5,
+            },
+            {
+                iip: 3.9,
+                numero: 6,
+            },
+            {
+                iip: 4.0,
+                numero: 7,
+            },
+            {
+                iip: 4.1,
+                numero: 8,
+            },
+        ];
+
+        const classificacao = classificarEstratosSegundoIIP(estratosResumo);
+
+        expect(classificacao.length).toEqual(3);
+        const classificacaoRiscoBaixo = classificacao.find((c) => c.risco === "Baixo");
+        const classificacaoRiscoMedio = classificacao.find((c) => c.risco === "Médio");
+        const classificacaoRiscoAlto = classificacao.find((c) => c.risco === "Alto");
+
+        expect(classificacaoRiscoBaixo?.percentual).toEqual(25);
+        expect(classificacaoRiscoMedio?.percentual).toEqual(50);
+        expect(classificacaoRiscoAlto?.percentual).toEqual(25);
+        expect(classificacaoRiscoBaixo?.quantidade).toEqual(2);
+        expect(classificacaoRiscoMedio?.quantidade).toEqual(4);
+        expect(classificacaoRiscoAlto?.quantidade).toEqual(2);
     });
 
     it("Deve calcular percentual de criadouros", () => {
@@ -250,15 +308,6 @@ describe("levantamento.model.ts", () => {
         });
     });
 
-    it("Deve calcular intervaloQuarteiroes", () => {
-        const intervaloQuarteiroes = 4.2;
-
-        const quarteiraoInicial = calcularQuarteiraoInicial(intervaloQuarteiroes);
-
-        expect(quarteiraoInicial).toBeGreaterThanOrEqual(0.5);
-        expect(quarteiraoInicial).toBeLessThanOrEqual(quarteiraoInicial);
-    });
-
     it("Deve calcularBairrosAmostra", () => {
         const bairros: Bairro[][] = [
             [{ numero: 1, nome: "A", quantidadeQuarteiroes: 10 }],
@@ -289,6 +338,10 @@ describe("levantamento.model.ts", () => {
     });
 
     it("Deve calcularDadosAmostraEstrato", () => {
+        const mockCalcularQuarteiraoInicial = calcularQuarteiraoInicial as jest.MockedFunction<
+            typeof calcularQuarteiraoInicial
+        >;
+        mockCalcularQuarteiraoInicial.mockReturnValue(0.5);
         const estrato: Estrato = new Estrato().deserialize({
             bairros: [
                 { nome: "A", quantidadeQuarteiroes: 200 },
@@ -348,6 +401,10 @@ describe("levantamento.model.ts", () => {
     });
 
     it("Deve  gerarRelatorioSorteioAmostra em Levantamento", () => {
+        const mockCalcularQuarteiraoInicial = calcularQuarteiraoInicial as jest.MockedFunction<
+            typeof calcularQuarteiraoInicial
+        >;
+        mockCalcularQuarteiraoInicial.mockReturnValue(0.5);
         const levantamento: Levantamento = gerarLevantamentoPadrao();
         const headersEsperados = {
             body: [
@@ -355,14 +412,14 @@ describe("levantamento.model.ts", () => {
                     { content: "Estrato 1", rowSpan: 2 },
                     { content: "Alto da Boa Vista", rowSpan: 1 },
                     { content: 1, rowSpan: 1 },
-                    { content: 0, rowSpan: 1 },
-                    { content: [], rowSpan: 1, styles: { cellWidth: 125 } },
+                    { content: 1, rowSpan: 1 },
+                    { content: [1], rowSpan: 1, styles: { cellWidth: 125 } },
                 ],
                 [
                     { content: "Baixo da Boa Vista", rowSpan: 1 },
                     { content: 2, rowSpan: 1 },
-                    { content: 0, rowSpan: 1 },
-                    { content: [], rowSpan: 1, styles: { cellWidth: 125 } },
+                    { content: 1, rowSpan: 1 },
+                    { content: [1], rowSpan: 1, styles: { cellWidth: 125 } },
                 ],
             ],
             bodyStyles: { halign: "center" },
@@ -391,14 +448,14 @@ describe("levantamento.model.ts", () => {
                     { content: "Estrato 1", rowSpan: 2 },
                     { content: "Alto da Boa Vista", rowSpan: 1 },
                     { content: 1, rowSpan: 1 },
-                    { content: 0, rowSpan: 1 },
-                    { content: [], rowSpan: 1, styles: { cellWidth: 125 } },
+                    { content: 1, rowSpan: 1 },
+                    { content: [1], rowSpan: 1, styles: { cellWidth: 125 } },
                 ],
                 [
                     { content: "Baixo da Boa Vista", rowSpan: 1 },
                     { content: 2, rowSpan: 1 },
-                    { content: 0, rowSpan: 1 },
-                    { content: [], rowSpan: 1, styles: { cellWidth: 125 } },
+                    { content: 1, rowSpan: 1 },
+                    { content: [1], rowSpan: 1, styles: { cellWidth: 125 } },
                 ],
             ],
         });
@@ -465,6 +522,10 @@ describe("levantamento.model.ts", () => {
     });
 
     it("Deve executar gerarLevantamentoResumoTodasExecucoes em LevantamentoResumo", () => {
+        const mockCalcularQuarteiraoInicial = calcularQuarteiraoInicial as jest.MockedFunction<
+            typeof calcularQuarteiraoInicial
+        >;
+        mockCalcularQuarteiraoInicial.mockReturnValue(0.5);
         const levantamentoResumo: LevantamentoResumo = gerarLevantamentoResumoPadrao();
 
         const data = levantamentoResumo.gerarLevantamentoResumoTodasExecucoes([gerarExecucaoPadrao()]);
@@ -570,7 +631,7 @@ describe("levantamento.model.ts", () => {
                                         numero: 1,
                                         quantidadeQuarteiroes: 1,
                                     },
-                                    quarteiroesSorteados: [],
+                                    quarteiroesSorteados: [1],
                                 },
                                 {
                                     bairro: {
@@ -578,17 +639,18 @@ describe("levantamento.model.ts", () => {
                                         numero: 2,
                                         quantidadeQuarteiroes: 2,
                                     },
-                                    quarteiroesSorteados: [],
+                                    quarteiroesSorteados: [1],
                                 },
                             ],
-                            estimativaImoveisPorQuarteirao: NaN,
-                            intervaloQuarteiroes: NaN,
-                            percentualQuarteiroes: NaN,
-                            quantidadeImoveisProgramados: NaN,
-                            quantidadeQuarteiroes: NaN,
-                            quarteiraoInicial: NaN,
+                            estimativaImoveisPorQuarteirao: 3000,
+                            intervaloQuarteiroes: 3,
+                            percentualQuarteiroes: 33.3,
+                            quantidadeImoveisProgramados: 429,
+                            quantidadeQuarteiroes: 1,
+                            quarteiraoInicial: 0.5,
                         },
                         numero: 1,
+                        quantidadeImoveis: 9000,
                     },
                 ],
                 id: "1",
@@ -630,7 +692,7 @@ describe("levantamento.model.ts", () => {
                     },
                 },
                 totalImoveisInspecionados: 210,
-                totalImoveisProgramados: NaN,
+                totalImoveisProgramados: 429,
                 totalOutrosInspecionadosAegypti: 45,
                 totalOutrosInspecionadosAlbopictus: 15,
                 totalRecipientesAegypti: 100,
@@ -662,6 +724,10 @@ describe("levantamento.model.ts", () => {
     });
 
     it("Deve executar gerarLevantamentoResumoUnicaExecucao em LevantamentoResumo", () => {
+        const mockCalcularQuarteiraoInicial = calcularQuarteiraoInicial as jest.MockedFunction<
+            typeof calcularQuarteiraoInicial
+        >;
+        mockCalcularQuarteiraoInicial.mockReturnValue(0.5);
         const levantamentoResumo: LevantamentoResumo = gerarLevantamentoResumoPadrao();
 
         const data = levantamentoResumo.gerarLevantamentoResumoUnicaExecucao(gerarExecucaoPadrao());
@@ -767,7 +833,7 @@ describe("levantamento.model.ts", () => {
                                         numero: 1,
                                         quantidadeQuarteiroes: 1,
                                     },
-                                    quarteiroesSorteados: [],
+                                    quarteiroesSorteados: [1],
                                 },
                                 {
                                     bairro: {
@@ -775,17 +841,18 @@ describe("levantamento.model.ts", () => {
                                         numero: 2,
                                         quantidadeQuarteiroes: 2,
                                     },
-                                    quarteiroesSorteados: [],
+                                    quarteiroesSorteados: [1],
                                 },
                             ],
-                            estimativaImoveisPorQuarteirao: NaN,
-                            intervaloQuarteiroes: NaN,
-                            percentualQuarteiroes: NaN,
-                            quantidadeImoveisProgramados: NaN,
-                            quantidadeQuarteiroes: NaN,
-                            quarteiraoInicial: NaN,
+                            estimativaImoveisPorQuarteirao: 3000,
+                            intervaloQuarteiroes: 3,
+                            percentualQuarteiroes: 33.3,
+                            quantidadeImoveisProgramados: 429,
+                            quantidadeQuarteiroes: 1,
+                            quarteiraoInicial: 0.5,
                         },
                         numero: 1,
+                        quantidadeImoveis: 9000,
                     },
                 ],
                 id: "1",
@@ -827,7 +894,7 @@ describe("levantamento.model.ts", () => {
                     },
                 },
                 totalImoveisInspecionados: 210,
-                totalImoveisProgramados: NaN,
+                totalImoveisProgramados: 429,
                 totalOutrosInspecionadosAegypti: 45,
                 totalOutrosInspecionadosAlbopictus: 15,
                 totalRecipientesAegypti: 0,
@@ -839,9 +906,107 @@ describe("levantamento.model.ts", () => {
         expect(data.levantamento.estratos.length).toEqual(1);
     });
 
-    it("Deve executar extrairLinhaLevantamentoResumo em LevantamentoResumo", () => {
+    it("Deve executar extrairLinhaLevantamentoResumo em LevantamentoResumo com todos depósitos", () => {
         const levantamentoResumo: LevantamentoResumo = gerarLevantamentoResumoPadrao();
+        levantamentoResumo.gerarLevantamentoResumoTodasExecucoes([gerarExecucaoPadrao()]);
 
+        const data = levantamentoResumo.extrairLinhaLevantamentoResumo();
+
+        expect(data).toBeTruthy();
+        expect(data.length).toEqual(19);
+        expect(data).toEqual([
+            "Geral",
+            "429",
+            "210",
+            "55",
+            "45",
+            "5",
+            "15",
+            "51",
+            "47.6",
+            "9.5",
+            "47.6",
+            "9.5",
+            "5",
+            "10",
+            "15",
+            "20",
+            "20",
+            "30",
+            "0",
+        ]);
+    });
+
+    it("Deve executar extrairLinhaLevantamentoResumo em LevantamentoResumo com todos depósitos valores direntes", () => {
+        const levantamentoResumo: LevantamentoResumo = gerarLevantamentoResumoPadrao();
+        levantamentoResumo.gerarLevantamentoResumoTodasExecucoes([gerarExecucaoPadrao()]);
+        (
+            levantamentoResumo.criadourosAegypti.find((c) => c.criadouro.sigla.toLocaleLowerCase() === "a1") || {
+                percentual: 11,
+            }
+        ).percentual = 11;
+        (
+            levantamentoResumo.criadourosAegypti.find((c) => c.criadouro.sigla.toLocaleLowerCase() === "a2") || {
+                percentual: 21,
+            }
+        ).percentual = 21;
+        (
+            levantamentoResumo.criadourosAegypti.find((c) => c.criadouro.sigla.toLocaleLowerCase() === "b") || {
+                percentual: 31,
+            }
+        ).percentual = 31;
+        (
+            levantamentoResumo.criadourosAegypti.find((c) => c.criadouro.sigla.toLocaleLowerCase() === "c") || {
+                percentual: 41,
+            }
+        ).percentual = 41;
+        (
+            levantamentoResumo.criadourosAegypti.find((c) => c.criadouro.sigla.toLocaleLowerCase() === "d1") || {
+                percentual: 51,
+            }
+        ).percentual = 51;
+        (
+            levantamentoResumo.criadourosAegypti.find((c) => c.criadouro.sigla.toLocaleLowerCase() === "d2") || {
+                percentual: 61,
+            }
+        ).percentual = 61;
+        (
+            levantamentoResumo.criadourosAegypti.find((c) => c.criadouro.sigla.toLocaleLowerCase() === "e") || {
+                percentual: 71,
+            }
+        ).percentual = 71;
+        levantamentoResumo.criadourosAegypti.reverse();
+
+        const data = levantamentoResumo.extrairLinhaLevantamentoResumo();
+
+        expect(data).toBeTruthy();
+        expect(data.length).toEqual(19);
+        expect(data).toEqual([
+            "Geral",
+            "429",
+            "210",
+            "55",
+            "45",
+            "5",
+            "15",
+            "51",
+            "47.6",
+            "9.5",
+            "47.6",
+            "9.5",
+            "11",
+            "21",
+            "31",
+            "41",
+            "51",
+            "61",
+            "71",
+        ]);
+    });
+
+    it("Deve executar extrairLinhaLevantamentoResumo em LevantamentoResumo sem todos depósitos", () => {
+        const levantamentoResumo: LevantamentoResumo = gerarLevantamentoResumoPadrao();
+        levantamentoResumo.criadourosAegypti = [];
         const data = levantamentoResumo.extrairLinhaLevantamentoResumo();
 
         expect(data).toBeTruthy();
@@ -859,13 +1024,13 @@ describe("levantamento.model.ts", () => {
             "undefined",
             "undefined",
             "undefined",
-            "1",
-            "undefined",
-            "undefined",
-            "undefined",
-            "undefined",
-            "undefined",
-            "undefined",
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
+            "0",
         ]);
     });
 
@@ -875,13 +1040,13 @@ describe("levantamento.model.ts", () => {
             body: [
                 [
                     "1",
-                    "NaN",
+                    "429",
                     "210",
                     "55",
                     "45",
                     "5",
                     "15",
-                    "NaN",
+                    "51",
                     "47.6",
                     "9.5",
                     "47.6",
@@ -896,13 +1061,13 @@ describe("levantamento.model.ts", () => {
                 ],
                 [
                     "Geral",
-                    "NaN",
+                    "429",
                     "210",
                     "55",
                     "45",
                     "5",
                     "15",
-                    "NaN",
+                    "51",
                     "47.6",
                     "9.5",
                     "47.6",
@@ -1074,13 +1239,13 @@ describe("levantamento.model.ts", () => {
             rows: [
                 [
                     "1",
-                    "NaN",
+                    "429",
                     "210",
                     "55",
                     "45",
                     "5",
                     "15",
-                    "NaN",
+                    "51",
                     "47.6",
                     "9.5",
                     "47.6",
@@ -1095,13 +1260,13 @@ describe("levantamento.model.ts", () => {
                 ],
                 [
                     "Geral",
-                    "NaN",
+                    "429",
                     "210",
                     "55",
                     "45",
                     "5",
                     "15",
-                    "NaN",
+                    "51",
                     "47.6",
                     "9.5",
                     "47.6",
@@ -1213,6 +1378,17 @@ describe("levantamento.model.ts", () => {
         levantamentoResumo.atualizarTipoRecipiente(criadouro);
 
         expect(levantamentoResumo.tiposRecipientesAegypti["a1"].quantidade).toBe(1);
+    });
+
+    it("Deve executar atualizarTipoRecipiente em RelatorioIndice criadouro con quantidade inválida", () => {
+        const levantamentoResumo = gerarRelatorioIndicePadrao();
+        const criadouro = gerarCriadouroLevantamentoPadrao();
+        criadouro.criadouro.sigla = "a1";
+        criadouro.quantidade = NaN;
+
+        levantamentoResumo.atualizarTipoRecipiente(criadouro);
+
+        expect(levantamentoResumo.tiposRecipientesAegypti["a1"].quantidade).toBe(NaN);
     });
 
     it("Deve executar extrairQuantidade em ExecucaoAedes criadouro inexistente", () => {
@@ -1438,5 +1614,235 @@ describe("levantamento.model.ts", () => {
                 quantidadeImoveis: 2500,
             },
         ]);
+    });
+});
+
+describe("customRound()", () => {
+    it("deve arredondar um valor positivo para o inteiro mais próximo", () => {
+        expect(customRound(3.6, 0)).toBe(4);
+    });
+
+    it("deve arredondar um valor negativo para o inteiro mais próximo", () => {
+        expect(customRound(-3.6, 0)).toBe(-4);
+    });
+
+    it("deve arredondar um valor positivo para um número específico de casas decimais", () => {
+        expect(customRound(3.14159, 3)).toBe(3.142);
+    });
+
+    it("deve arredondar um valor negativo para um número específico de casas decimais", () => {
+        expect(customRound(-3.14159, 3)).toBe(-3.142);
+    });
+
+    it("deve retornar zero se o valor de entrada for zero", () => {
+        expect(customRound(0, 2)).toBe(0);
+    });
+});
+
+describe("addHeaders()", () => {
+    it("deve adicionar headers em todas as paginas do documento", () => {
+        const doc = {
+            getNumberOfPages: () => 3,
+            setPage: jest.fn(),
+            text: jest.fn(),
+            setFont: jest.fn(),
+            setFontSize: jest.fn(),
+        };
+        const levantamento = {
+            municipio: {
+                municipioNome: "São Paulo",
+                municipioUF: "SP",
+            },
+            periodoInicio: "2022-01-01",
+            periodoFim: "2022-01-31",
+        } as Levantamento;
+        addHeaders(doc, "Relatório", levantamento);
+        expect(doc.setPage).toHaveBeenCalledTimes(3);
+        expect(doc.text).toHaveBeenCalledWith("Liraa App", 15, 12);
+        expect(doc.text).toHaveBeenCalledWith("Relatório", 125, 12);
+        expect(doc.text).toHaveBeenCalledWith("São Paulo/SP", 200, 12);
+        expect(doc.text).toHaveBeenCalledWith("01/01/2022 a 31/01/2022", 235, 12);
+        expect(doc.setFont).toHaveBeenCalledWith("helvetica");
+        expect(doc.setFontSize).toHaveBeenCalledWith(12);
+    });
+});
+
+describe("addFooters()", () => {
+    it("deve adicionar footers em todas as páginas do documento", () => {
+        const doc = {
+            getNumberOfPages: () => 3,
+            setPage: jest.fn(),
+            text: jest.fn(),
+            setFont: jest.fn(),
+            setFontSize: jest.fn(),
+            internal: {
+                pageSize: {
+                    width: 210, // A4 width
+                    height: 297, // A4 height
+                },
+            },
+        } as any;
+        addFooters(doc);
+        expect(doc.setPage).toHaveBeenCalledTimes(3);
+        expect(doc.text).toHaveBeenCalledWith("Página 1 de 3", 105, 287, {
+            align: "center",
+        });
+        expect(doc.text).toHaveBeenCalledWith("Página 2 de 3", 105, 287, {
+            align: "center",
+        });
+        expect(doc.text).toHaveBeenCalledWith("Página 3 de 3", 105, 287, {
+            align: "center",
+        });
+        expect(doc.setFont).toHaveBeenCalledWith("helvetica");
+        expect(doc.setFontSize).toHaveBeenCalledWith(8);
+    });
+});
+
+describe("filtrarLevantamentosPorTexto()", () => {
+    const levantamentos: any[] = [
+        {
+            municipio: {
+                municipioNome: "São Paulo",
+                municipioUF: "SP",
+            },
+            ano: 2022,
+            periodoInicio: "2022-01-01",
+            periodoFim: "2022-01-31",
+        },
+        {
+            municipio: {
+                municipioNome: "Campinas",
+                municipioUF: "SP",
+            },
+            ano: 2022,
+            periodoInicio: "2022-02-01",
+            periodoFim: "2022-02-28",
+        },
+        {
+            municipio: {
+                municipioNome: "Belo Horizonte",
+                municipioUF: "MG",
+            },
+            ano: 2021,
+            periodoInicio: "2021-01-01",
+            periodoFim: "2021-12-31",
+        },
+        {
+            municipio: {
+                municipioNome: "Belo Horizonte",
+                municipioUF: "MG",
+            },
+            ano: 2023,
+            periodoInicio: "2021-01-01",
+            periodoFim: "2021-12-31",
+        },
+    ];
+
+    it("deve retornar todos os levantamentos se nenhum texto for fornecido", () => {
+        expect(filtrarLevantamentosPorTexto(levantamentos, "")).toEqual(levantamentos);
+    });
+
+    it("deve retornar levantamentos filtrados por nome do município", () => {
+        expect(filtrarLevantamentosPorTexto(levantamentos, "são paulo")).toEqual([levantamentos[0]]);
+    });
+
+    it("deve retornar levantamentos filtrados por UF do município", () => {
+        expect(filtrarLevantamentosPorTexto(levantamentos, "sp")).toEqual([levantamentos[0], levantamentos[1]]);
+    });
+
+    it("deve retornar levantamentos filtrados por ano", () => {
+        expect(filtrarLevantamentosPorTexto(levantamentos, "2023")).toEqual([levantamentos[3]]);
+    });
+
+    it("deve retornar levantamentos filtrados por data de início do período", () => {
+        expect(filtrarLevantamentosPorTexto(levantamentos, "2022-01-01")).toEqual([levantamentos[0]]);
+    });
+
+    it("deve retornar levantamentos filtrados por data de fim do período", () => {
+        expect(filtrarLevantamentosPorTexto(levantamentos, "2022-02-28")).toEqual([levantamentos[1]]);
+    });
+
+    it("deve retornar um array vazio se nenhum levantamento corresponder ao texto de filtro", () => {
+        expect(filtrarLevantamentosPorTexto(levantamentos, "texto inexistente")).toEqual([]);
+    });
+});
+
+describe("calcularBairrosAmostra()", () => {
+    const bairros: any[] = [
+        {
+            nome: "Bairro A",
+            quantidadeQuarteiroes: 10,
+        },
+        {
+            nome: "Bairro B",
+            quantidadeQuarteiroes: 15,
+        },
+        {
+            nome: "Bairro C",
+            quantidadeQuarteiroes: 20,
+        },
+    ];
+
+    it("deve retornar um array vazio quando nenhum bairro é fornecido", () => {
+        expect(calcularBairrosAmostra([], 1, 1)).toEqual([]);
+    });
+
+    it("deve retornar a amostra correta de quarteirões para um único bairro", () => {
+        expect(calcularBairrosAmostra([bairros[0]], 1, 2)).toEqual([
+            {
+                bairro: bairros[0],
+                quarteiroesSorteados: [1, 3, 5, 7, 9],
+            },
+        ]);
+    });
+
+    it("deve retornar a amostra correta de quarteirões para vários bairros", () => {
+        expect(calcularBairrosAmostra(bairros, 0, 5)).toEqual([
+            {
+                bairro: bairros[0],
+                quarteiroesSorteados: [0, 5],
+            },
+            {
+                bairro: bairros[1],
+                quarteiroesSorteados: [0, 5, 10],
+            },
+            {
+                bairro: bairros[2],
+                quarteiroesSorteados: [0, 5, 10, 15],
+            },
+        ]);
+    });
+
+    it("deve arredondar corretamente os números de quarteirão", () => {
+        expect(calcularBairrosAmostra([bairros[0]], 1.4, 1.2)).toEqual([
+            {
+                bairro: bairros[0],
+                quarteiroesSorteados: [1, 3, 4, 5, 6, 7, 9, 10],
+            },
+        ]);
+    });
+});
+
+describe("Estrato", () => {
+    describe("extrairTotalImoveisProgramados", () => {
+        it("deve retornar 0 quando dadosAmostra estiver indefinido", () => {
+            const estrato = new Estrato();
+            const resultado = estrato.extrairTotalImoveisProgramados();
+            expect(resultado).toBe(0);
+        });
+
+        it("deve retornar 0 quando quantidadeImoveisProgramados estiver indefinido", () => {
+            const estrato = new Estrato();
+            estrato.dadosAmostra = {} as any;
+            const resultado = estrato.extrairTotalImoveisProgramados();
+            expect(resultado).toBe(0);
+        });
+
+        it("deve retornar a quantidade de imóveis programados corretamente", () => {
+            const estrato = new Estrato();
+            estrato.dadosAmostra = { quantidadeImoveisProgramados: 5 } as any;
+            const resultado = estrato.extrairTotalImoveisProgramados();
+            expect(resultado).toBe(5);
+        });
     });
 });
