@@ -1,0 +1,52 @@
+{
+    "name": "liraa-calculadora-typescript",
+    "version": "0.0.1",
+    "description": "LIRAa Calculadora é uma biblioteca TypeScript de código aberto que permite calcular o índice de infestação do mosquito Aedes aegypti em um determinado local, de acordo com o método estabelecido pelo Ministério da Saúde.",
+    "main": "lib/index.js",
+    "types": "lib/index.d.ts",
+    "scripts": {
+        "build": "tsc",
+        "test": "jest --config jestconfig.json --coverage",
+        "format": "prettier --write \"src/**/*.ts\" \"src/**/*.js\"",
+        "lint": "tslint -p tsconfig.json",
+        "prepare": "npm run build",
+        "prepublishOnly": "npm test && npm run lint",
+        "preversion": "npm run lint",
+        "version": "npm run format && git add -A src",
+        "postversion": "git push && git push --tags"
+    },
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/GleytonLima/liraa-calculadora-typescript.git"
+    },
+    "keywords": [
+        "liraa",
+        "calculadora",
+        "typescript"
+    ],
+    "author": "Gleyton Lima",
+    "license": "MIT",
+    "bugs": {
+        "url": "https://github.com/GleytonLima/liraa-calculadora-typescript/issues"
+    },
+    "homepage": "https://github.com/GleytonLima/liraa-calculadora-typescript#readme",
+    "devDependencies": {
+        "@stryker-mutator/core": "^5.5.1",
+        "@stryker-mutator/jest-runner": "^5.5.1",
+        "@stryker-mutator/typescript-checker": "^5.5.1",
+        "@types/jest": "^27.0.3",
+        "jest": "^27.4.4",
+        "prettier": "^2.5.1",
+        "ts-jest": "^27.1.1",
+        "tslint": "^6.1.3",
+        "tslint-config-prettier": "^1.18.0",
+        "typescript": "~4.7.3"
+    },
+    "dependencies": {
+        "jspdf": "^2.5.1",
+        "jspdf-autotable": "^3.5.25"
+    },
+    "files": [
+        "lib/**/*"
+    ]
+}

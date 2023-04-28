@@ -1,0 +1,9 @@
+node_modules
+coverage
+/lib
+# stryker temp files
+.stryker-tmp
+reports
+relatorio-teste.pdf
+reports
+LIRAa
